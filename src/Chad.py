@@ -1,15 +1,20 @@
-import json
+from ast import keyword
 import re
-import numpy as np
-from sre_parse import DIGITS
+import string
 
 DIGITS = '0123456789'
+LETTERS = string.ascii_letters
+LETTERS_DIGITS = LETTERS + DIGITS
 Plus_Minus = '+-'
 Mul_Div_Mod = '*/%'
-Compound = ['+=', 'x=', '-=', '/=', '%=']
+Compound = ['+=', '*=', '-=', '/=', '%=']
 Relational_Operation = ['<', '>', '<=', '>=', '!=', '==']
 And_Logical = ['&&']
 OR_Logical = ['||']
+Brackets = ['(', ')', '{', '}', '[', ']']
+Key_words = ['bool', 'byte', 'char', 'int', 'long', 'short', 'float', 'double', 'private', 'protected', 'public', 'abstract', 'final', 'try', 'catch', 'finally', 'throw', 'break', 'case', 'continue', 'do', 'while', 'range', 'switch',
+             "elseif", 'if', 'else', 'page,extends', 'implements', 'import', 'instanceOf', 'new', 'return', 'interface', 'this', 'throws', 'void', 'super', 'accept', 'decline', "null", 'constant', 'define', 'func', 'open', 'close', 'const', 'goto']
+id = r'^[A-Za-z_]+[A-Za-z0-9_]*'
 
 # Error reporting
 
@@ -26,6 +31,10 @@ class Error:
     def asString(self):
         result = f'{self.error_name}: {self.details}\n'
         result += f'File {self.position_start.file_name}, line {self.position_start.line + 1}'
+        f = open(
+            r'D:\uni\Sem VI\Compiler Construction\Project\Chad-Compiler\Token\token.txt', 'a')
+        f.write(
+            f'({self.error_name},{self.details},{self.position_start.line})\n')
         return result
 
     # for not allowed characters
@@ -60,20 +69,6 @@ class Position:
         return Position(self.index, self.line, self.column, self.file_name, self.file_text)
 
 # Token generation
-
-# token constants
-
-
-TT_INT = 'int'
-TT_FLOAT = 'float'
-TT_CHAR = 'char'
-TT_STR = 'String'
-TT_PLUS = 'Plus'
-TT_MINUS = 'Minus'
-TT_DIV = 'Div'
-TT_MUL = 'Mul'
-TT_LPAREN = 'LPAREN'
-TT_RPAREN = 'RPAREN'
 
 
 class Token:
@@ -117,30 +112,136 @@ class Lexer:
             char = self.current_char
             if self.current_char in ' \t':
                 self.advance()
+            elif self.current_char in re.findall('\w', self.current_char):
+                tokens.append(self.isIdentifier())
+            elif self.current_char == "'":
+                tokens.append(self.isChar())
+            elif self.current_char == '"':
+                tokens.append(self.isString())
             elif self.current_char in re.findall('\d', self.current_char):
                 tokens.append(self.isNumber())
+            elif self.current_char in Compound:
+                tokens.append(self.isCompound())
+                self.advance()
             elif self.current_char in Plus_Minus:
                 tokens.append(self.isPlusMinus())
                 self.advance()
             elif self.current_char in Mul_Div_Mod:
                 tokens.append(self.isMultiplicationDivideModulus())
                 self.advance()
-            # elif self.current_char == '/':
-            #     tokens.append(Token('Div'))
-            #     self.advance()
-            elif self.current_char == '(':
-                tokens.append(Token('LPAREN'))
+            elif self.current_char in Brackets:
+                tokens.append(self.isBracket())
                 self.advance()
-            elif self.current_char == ')':
-                tokens.append(Token('RPAREN'))
+            elif self.current_char in Relational_Operation:
+                tokens.append(self.isRelationalOperator())
                 self.advance()
             else:
                 self.advance()
-                # tokens.append(IllegalCharError(
-                # position_start, self.position, "'" + char + "'"))
                 return [], IllegalCharError(position_start, self.position, "'" + char + "'")
 
         return tokens, None
+
+    def isIdentifier(self):
+        # writing tokens
+        f = open(
+            r'D:\uni\Sem VI\Compiler Construction\Project\Chad-Compiler\Token\token.txt', 'a')
+        id_str = ''
+        position_start = self.position.copy()
+
+        while self.current_char != None and self.current_char in LETTERS_DIGITS + '_':
+            id_str += self.current_char
+            self.advance()
+
+        token_type = 'Keyword' if id_str in Key_words else 'Identifier'
+        f.write(f'({token_type},{id_str},{self.position.line+1})\n')
+        return Token(token_type, id_str, self.position.line+1)
+
+    def isString(self):
+        # writing tokens
+        f = open(
+            r'D:\uni\Sem VI\Compiler Construction\Project\Chad-Compiler\Token\token.txt', 'a')
+        string = ''
+        position_start = self.position.copy()
+        escape_character = False
+        self.advance()
+
+        escape_characters = {
+            'n': '\n',
+            't': '\t'
+        }
+        while self.current_char != None and (self.current_char != '"' or escape_character):
+            if escape_character:
+                string += escape_characters.get(self.current_char,
+                                                self.current_char)
+            else:
+                if self.current_char == '\\':
+                    escape_character = True
+                else:
+                    string += self.current_char
+                self.advance()
+                escape_character = False
+
+        self.advance()
+        f.write(f'(String,{string},{self.position.line+1})\n')
+        return Token('String', string, self.position.line+1)
+
+    def isChar(self):
+        # writing tokens
+        f = open(
+            r'D:\uni\Sem VI\Compiler Construction\Project\Chad-Compiler\Token\token.txt', 'a')
+        char = ''
+        position_start = self.position.copy()
+        escape_character = False
+        self.advance()
+
+        escape_characters = {
+            'n': '\n',
+            't': '\t'
+        }
+        while self.current_char != None and (self.current_char != "'" or escape_character):
+            if escape_character:
+                char += escape_characters.get(self.current_char,
+                                              self.current_char)
+            else:
+                if self.current_char == '\\':
+                    escape_character = True
+                else:
+                    char += self.current_char
+                self.advance()
+                escape_character = False
+
+        self.advance()
+        f.write(f'(Char,{char},{self.position.line+1})\n')
+        return Token('Char', char, self.position.line+1)
+
+    def isString(self):
+        # writing tokens
+        f = open(
+            r'D:\uni\Sem VI\Compiler Construction\Project\Chad-Compiler\Token\token.txt', 'a')
+        string = ''
+        position_start = self.position.copy()
+        escape_character = False
+        self.advance()
+
+        escape_characters = {
+            'n': '\n',
+            't': '\t'
+        }
+        while self.current_char != None and (self.current_char != '"' or escape_character):
+            if escape_character:
+                string += escape_characters.get(self.current_char,
+                                                self.current_char)
+            else:
+                if self.current_char == '\\':
+                    escape_character = True
+                else:
+                    string += self.current_char
+                self.advance()
+                escape_character = False
+
+        self.advance()
+        f.write(f'(String,{string},{self.position.line+1})\n')
+        return Token('String', string, self.position.line+1)
 
     def isNumber(self):
 
@@ -165,46 +266,129 @@ class Lexer:
             f.write(f'(int,{int(num_str)},{self.position.line})\n')
             return Token('int', int(num_str), self.position.line)
         else:
-            f.write(f'(int,{float(num_str)},{self.position.line})\n')
-            return Token('float', float(num_str), self.position.line)
+            f.write(f'(int,{float(num_str)},{self.position.line+1})\n')
+            return Token('float', float(num_str), self.position.line+1)
 
     def isPlusMinus(self):
         # writing tokens
         f = open(
             r'D:\uni\Sem VI\Compiler Construction\Project\Chad-Compiler\Token\token.txt', 'a')
+        comp_str = ''
+        position_start = self.position.copy()
+        token_type = ''
         while self.current_char != None and self.current_char in Plus_Minus:
             if self.current_char == '+':
-                f.write(f'(int,{self.current_char},{self.position.line})\n')
-                return Token('PM', self.current_char, self.position.line)
-                break
+                comp_str += self.current_char
+                self.advance()
+                if self.current_char == '=':
+                    comp_str += self.current_char
+                token_type = 'Compound' if comp_str in Compound else 'PM'
+                f.write(f'({token_type},{comp_str},{self.position.line+1})\n')
+                return Token(token_type, comp_str, self.position.line+1)
             else:
-                f.write(f'(int,{self.current_char},{self.position.line})\n')
-                return Token('PM', self.current_char, self.position.line)
-                break
+                comp_str += self.current_char
+                self.advance()
+                if self.current_char == '=':
+                    comp_str += self.current_char
+                token_type = 'Compound' if comp_str in Compound else 'PM'
+                f.write(f'({token_type},{comp_str},{self.position.line+1})\n')
+                return Token(token_type, comp_str, self.position.line+1)
 
     def isMultiplicationDivideModulus(self):
         # writing tokens
+        comp_str = ''
+        position_start = self.position.copy()
+        token_type = ''
         f = open(
             r'D:\uni\Sem VI\Compiler Construction\Project\Chad-Compiler\Token\token.txt', 'a')
         while self.current_char != None and self.current_char in Mul_Div_Mod:
             if self.current_char == '*':
-                f.write(f'(int,{self.current_char},{self.position.line})\n')
-                return Token('MDM', self.current_char, self.position.line)
-                break
+                comp_str += self.current_char
+                self.advance()
+                if self.current_char == '=':
+                    comp_str += self.current_char
+                token_type = 'Compound' if comp_str in Compound else 'MDM'
+                f.write(f'({token_type},{comp_str},{self.position.line+1})\n')
+                return Token(token_type, comp_str, self.position.line+1)
             elif self.current_char == '/':
-                f.write(f'(int,{self.current_char},{self.position.line})\n')
-                return Token('MDM', self.current_char, self.position.line)
-                break
+                comp_str += self.current_char
+                self.advance()
+                if self.current_char == '=':
+                    comp_str += self.current_char
+                token_type = 'Compound' if comp_str in Compound else 'MDM'
+                f.write(f'({token_type},{comp_str},{self.position.line+1})\n')
+                return Token(token_type, comp_str, self.position.line+1)
             else:
-                f.write(f'(int,{self.current_char},{self.position.line})\n')
-                return Token('MDM', self.current_char, self.position.line)
-                break
+                comp_str += self.current_char
+                self.advance()
+                if self.current_char == '=':
+                    comp_str += self.current_char
+                token_type = 'Compound' if comp_str in Compound else 'MDM'
+                f.write(f'({token_type},{comp_str},{self.position.line+1})\n')
+                return Token(token_type, comp_str, self.position.line+1)
 
+    def isRelationalOperator(self):
+        # writing tokens
+        comp_str = ''
+        position_start = self.position.copy()
+        token_type = ''
+        f = open(
+            r'D:\uni\Sem VI\Compiler Construction\Project\Chad-Compiler\Token\token.txt', 'a')
+        while self.current_char != None and self.current_char in Relational_Operation:
+            if self.current_char == '<':
+                comp_str += self.current_char
+                self.advance()
+                if self.current_char == '=':
+                    comp_str += self.current_char
+                token_type = 'RO'
+                f.write(f'({token_type},{comp_str},{self.position.line+1})\n')
+                return Token(token_type, comp_str, self.position.line+1)
+            elif self.current_char == '>':
+                comp_str += self.current_char
+                self.advance()
+                if self.current_char == '=':
+                    comp_str += self.current_char
+                token_type = 'RO'
+                f.write(f'({token_type},{comp_str},{self.position.line+1})\n')
+                return Token(token_type, comp_str, self.position.line+1)
+            elif self.current_char == '!':
+                comp_str += self.current_char
+                self.advance()
+                if self.current_char == '=':
+                    comp_str += self.current_char
+                token_type = 'RO'
+                f.write(f'({token_type},{comp_str},{self.position.line+1})\n')
+                return Token(token_type, comp_str, self.position.line+1)
+            else:
+                comp_str += self.current_char
+                self.advance()
+                if self.current_char == '=':
+                    comp_str += self.current_char
+                token_type = 'RO'
+                f.write(f'({token_type},{comp_str},{self.position.line+1})\n')
+                return Token(token_type, comp_str, self.position.line+1)
 
+    def isBracket(self):
+        # writing tokens
+        f = open(
+            r'D:\uni\Sem VI\Compiler Construction\Project\Chad-Compiler\Token\token.txt', 'a')
+        while self.current_char != None and self.current_char in Brackets:
+            f.write(f'({self.current_char}, ,{self.position.line+1})\n')
+            return Token(self.current_char, ' ', self.position.line+1)
 # driver class
+
 
 def run(file_name, text):
     lexer = Lexer(file_name, text)
     tokens, error = lexer.makeTokens()
 
     return tokens, error
+
+
+def runFile(file_name):
+    while 1:
+    # read by character
+        char = file_name.read(1)
+        run(file_name, char)         
+        if not char:
+            break
